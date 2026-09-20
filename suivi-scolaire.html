@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Suivi Scolaire</title>
+
+    <style>
+        :root {
+            --bg: #F5F5F7;
+            --card: #FFFFFF;
+            --text: #1C1C1E;
+            --subtext: #6E6E73;
+            --border: #E3E3E6;
+            --input-bg: #F0F0F2;
+            --accent: #3D5AFE;
+            --accent-contrast: #FFFFFF;
+            --danger: #D64545;
+            --danger-bg: rgba(214, 69, 69, 0.1);
+            --success: #1E9E5A;
+            --success-bg: rgba(30, 158, 90, 0.1);
+            --warn: #B8860B;
+            --overlay: rgba(0, 0, 0, 0.4);
+        }
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --bg: #121214;
+                --card: #1C1C1F;
+                --text: #F2F2F3;
+                --subtext: #9A9AA0;
+                --border: #2E2E32;
+                --input-bg: #26262A;
+                --accent: #6C87FF;
+                --accent-contrast: #0B0B0C;
+                --overlay: rgba(0, 0, 0, 0.6);
+            }
+        }
+        :root[data-theme="dark"] {
+            --bg: #121214;
+            --card: #1C1C1F;
+            --text: #F2F2F3;
+            --subtext: #9A9AA0;
+            --border: #2E2E32;
+            --input-bg: #26262A;
+            --accent: #6C87FF;
+            --accent-contrast: #0B0B0C;
+            --overlay: rgba(0, 0, 0, 0.6);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px 16px 40px;
+            display: flex;
+            justify-content: center;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container { width: 100%; max-width: 480px; }
+
+        .app-title { font-size: 20px; font-weight: 700; margin: 0 0 16px 2px; }
+
+        /* --- Sélecteur d'enfant --- */
+        .child-switcher { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; margin-bottom: 14px; }
+        .child-pill { flex: 0 0 auto; background: var(--card); border: 1px solid var(--border); color: var(--subtext); padding: 7px 14px; border-radius: 18px; font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap; }
+        .child-pill.active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+        .child-pill.add-pill { color: var(--accent); border-style: dashed; background: transparent; }
+
+        /* --- Cartes génériques --- */
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+
+        /* --- Profil (repliable) --- */
+        .profile-toggle { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+        .profile-toggle-label { font-size: 13px; font-weight: 600; color: var(--subtext); }
+        .chevron { font-size: 12px; color: var(--subtext); transition: transform 0.15s; }
+        .chevron.open { transform: rotate(180deg); }
+        .profile-body { display: none; margin-top: 14px; }
+        .profile-body.open { display: block; }
+        .field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 10px; }
+
+        label.field-label { font-size: 11px; font-weight: 600; color: var(--subtext); display: block; margin-bottom: 4px; }
+
+        input, select {
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 14px;
+            color: var(--text);
+            outline: none;
+            width: 100%;
+            font-family: inherit;
+        }
+        input:focus, select:focus { border-color: var(--accent); }
+
+        /* --- Dashboard moyenne --- */
+        .dashboard { text-align: center; padding: 22px 16px; }
+        .dashboard-label { font-size: 12px; font-weight: 600; color: var(--subtext); text-transform: uppercase; letter-spacing: 0.4px; }
+        .dashboard-value { font-size: 44px; font-weight: 700; letter-spacing: -1px; line-height: 1.1; margin-top: 2px; }
+        .dashboard-sub { font-size: 12px; color: var(--subtext); margin-top: 6px; }
+
+        /* --- Onglets Notes / Objectifs --- */
+        .tab-bar { display: flex; background: var(--input-bg); border-radius: 12px; padding: 3px; margin-bottom: 14px; }
+        .tab-btn { flex: 1; background: transparent; border: none; padding: 9px 0; font-size: 13px; font-weight: 600; color: var(--subtext); border-radius: 9px; cursor: pointer; font-family: inherit; }
+        .tab-btn.active { background: var(--card); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+
+        /* --- Liste de notes --- */
+        .note-row { display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--border); cursor: pointer; }
+        .note-row:last-child { border-bottom: none; }
+        .note-main { flex: 1; min-width: 0; }
+        .note-matiere { font-weight: 600; font-size: 14px; }
+        .note-meta { font-size: 12px; color: var(--subtext); margin-top: 1px; }
+        .note-badge { font-weight: 700; font-size: 15px; padding: 4px 9px; border-radius: 8px; white-space: nowrap; }
+        .note-badge.high { color: var(--success); background: var(--success-bg); }
+        .note-badge.mid { color: var(--warn); background: rgba(184,134,11,0.1); }
+        .note-badge.low { color: var(--danger); background: var(--danger-bg); }
+        .trend { font-size: 13px; width: 12px; text-align: center; color: var(--subtext); }
+        .trend.up { color: var(--success); }
+        .trend.down { color: var(--danger); }
+
+        .empty-notes { text-align: center; padding: 20px 8px; color: var(--subtext); font-size: 13px; }
+
+        /* --- Boutons --- */
+        button { font-family: inherit; }
+        .btn { width: 100%; border: none; border-radius: 12px; padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer; }
+        .btn-primary { background: var(--accent); color: var(--accent-contrast); }
+        .btn-secondary { background: var(--input-bg); color: var(--text); }
+        .btn-danger { background: var(--danger-bg); color: var(--danger); }
+        .btn-text { background: transparent; color: var(--accent); padding: 10px; font-weight: 600; font-size: 13px; }
+        .btn-row { display: flex; gap: 8px; margin-top: 6px; }
+        .btn-row .btn { margin-top: 0; }
+
+        /* --- Formulaire modal (ajout / édition de note) --- */
+        .modal-overlay { position: fixed; inset: 0; background: var(--overlay); display: none; align-items: flex-end; justify-content: center; z-index: 50; }
+        .modal-overlay.open { display: flex; }
+        .modal-sheet { background: var(--card); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); }
+        .modal-title { font-size: 16px; font-weight: 700; margin: 0 0 14px; }
+
+        /* --- Objectifs & simulation --- */
+        .slider-block { background: var(--input-bg); padding: 14px; border-radius: 12px; margin-bottom: 10px; }
+        .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
+        .target-val { color: var(--accent); font-weight: 700; }
+        input[type="range"] { -webkit-appearance: none; width: 100%; height: 5px; border-radius: 3px; background: var(--border); outline: none; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+
+        .info-box { background: var(--input-bg); border-radius: 10px; padding: 11px 12px; font-size: 13px; line-height: 1.45; margin-top: 8px; }
+        .info-box.success { background: var(--success-bg); color: var(--success); }
+        .muted-note { font-size: 11px; color: var(--subtext); margin-top: 8px; line-height: 1.4; }
+
+        .simu-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+        .simu-group > * { flex: 1; min-width: 110px; }
+
+        .link-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+        .btn-link { display: inline-block; background: var(--input-bg); color: var(--text); text-decoration: none; padding: 8px 12px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+
+        .section-title { font-size: 13px; font-weight: 700; color: var(--subtext); text-transform: uppercase; letter-spacing: 0.4px; margin: 0 0 10px; }
+
+        .toast-msg {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            background: var(--text); color: var(--bg);
+            padding: 10px 18px; border-radius: 20px; font-weight: 600; font-size: 13px;
+            display: none; z-index: 999; max-width: 90vw; text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <h1 class="app-title">Suivi Scolaire</h1>
+
+    <div class="child-switcher" id="child-switcher" style="display:none;"></div>
+
+    <!-- Aucun enfant encore créé -->
+    <div class="card" id="empty-state" style="display:none;">
+        <p class="muted-note" style="margin:0 0 10px;">Aucun profil pour l'instant. Ajoutez un prénom pour commencer — visible sur tous les appareils qui ouvrent cette page.</p>
+        <div style="display:flex; gap:8px;">
+            <input type="text" id="new-child-name" placeholder="Prénom de l'élève" aria-label="Prénom du nouvel élève">
+            <button class="btn btn-primary" style="width:auto; white-space:nowrap;" onclick="ajouterEnfant()">Ajouter</button>
+        </div>
+    </div>
+
+    <div id="main-content" style="display:none;">
+
+        <!-- Profil (repliable) -->
+        <div class="card">
+            <div class="profile-toggle" onclick="toggleProfil()">
+                <span class="profile-toggle-label" id="profile-toggle-text">Profil</span>
+                <span class="chevron" id="profile-chevron">▾</span>
+            </div>
+            <div class="profile-body" id="profile-body">
+                <div class="field-row">
+                    <div>
+                        <label class="field-label" for="prenom">Prénom</label>
+                        <input type="text" id="prenom" placeholder="Prénom" aria-label="Prénom" oninput="sauvegarderProfilDebounce()">
+                    </div>
+                    <div>
+                        <label class="field-label" for="nom">Nom</label>
+                        <input type="text" id="nom" placeholder="Nom" aria-label="Nom" oninput="sauvegarderProfilDebounce()">
+                    </div>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <label class="field-label" for="classe">Niveau scolaire</label>
+                    <select id="classe" aria-label="Niveau scolaire" onchange="sauvegarderProfilImmediat(); genererLiensRevision();">
+                        <option value="">Niveau Scolaire</option>
+                        <optgroup label="Collège">
+                            <option value="6ème">6ème</option>
+                            <option value="5ème">5ème</option>
+                            <option value="4ème">4ème</option>
+                            <option value="3ème">3ème</option>
+                        </optgroup>
+                        <optgroup label="Lycée Général & Technologique">
+                            <option value="2de Générale">2de Générale</option>
+                            <option value="1ère Générale">1ère Générale</option>
+                            <option value="1ère STMG">1ère STMG</option>
+                            <option value="1ère STI2D">1ère STI2D</option>
+                            <option value="1ère ST2S">1ère ST2S</option>
+                            <option value="Terminale Générale">Terminale Générale</option>
+                            <option value="Terminale STMG">Terminale STMG</option>
+                            <option value="Terminale STI2D">Terminale STI2D</option>
+                        </optgroup>
+                        <optgroup label="Lycée Professionnel">
+                            <option value="2de Pro">2de Professionnelle</option>
+                            <option value="1ère CAP">1ère CAP</option>
+                            <option value="2ème CAP">2ème CAP</option>
+                            <option value="1ère Bac Pro">1ère Bac Pro</option>
+                            <option value="Terminale Bac Pro">Terminale Bac Pro</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <button class="btn btn-danger" onclick="supprimerEnfant()">Supprimer ce profil élève</button>
+            </div>
+        </div>
+
+        <!-- Dashboard moyenne -->
+        <div class="card dashboard">
+            <div class="dashboard-label">Moyenne générale</div>
+            <div class="dashboard-value" id="moyenne-generale">-- / 20</div>
+            <div class="dashboard-sub" id="dashboard-objectif-sub">Objectif : 14.0 / 20</div>
+        </div>
+
+        <!-- Onglets -->
+        <div class="tab-bar">
+            <button class="tab-btn active" id="tab-btn-notes" onclick="changerOnglet('notes')">Notes</button>
+            <button class="tab-btn" id="tab-btn-objectifs" onclick="changerOnglet('objectifs')">Objectifs &amp; Simulation</button>
+        </div>
+
+        <!-- Onglet Notes -->
+        <div id="panel-notes">
+            <div class="card">
+                <h2 class="section-title">Relevé de notes</h2>
+                <div id="notes-list"></div>
+                <div class="empty-notes" id="notes-empty" style="display:none;">Aucune note pour l'instant.</div>
+                <button class="btn btn-secondary" style="margin-top: 10px;" onclick="ouvrirFormulaireNote()">+ Ajouter une note</button>
+                <div class="muted-note">Synchronisé en direct sur tous les appareils qui ouvrent cette page.</div>
+            </div>
+        </div>
+
+        <!-- Onglet Objectifs -->
+        <div id="panel-objectifs" style="display:none;">
+            <div class="card">
+                <h2 class="section-title">Moyenne cible</h2>
+                <div class="slider-block">
+                    <div class="slider-header">
+                        <span>Objectif</span>
+                        <span class="target-val" id="target-display">14.0 / 20</span>
+                    </div>
+                    <input type="range" id="objectif-slider" min="0" max="20" step="0.5" value="14" aria-label="Moyenne cible" oninput="mettreAJourSliderLocal(this.value)" onchange="mettreAJourSliderCommit(this.value)">
+                </div>
+                <div class="info-box success" id="projection-a-texte">...</div>
+            </div>
+
+            <div class="card">
+                <h2 class="section-title">Simuler un devoir</h2>
+                <div class="simu-group">
+                    <select id="simu-matiere-select" aria-label="Matière simulée" onchange="gestionMatiereSimu(this.value)">
+                        <option value="">Matière...</option>
+                    </select>
+                    <input type="text" id="simu-matiere-custom" placeholder="Autre matière..." aria-label="Autre matière" style="display: none;">
+                </div>
+                <div class="simu-group" style="margin-top: 8px;">
+                    <input type="text" id="simu-theme" placeholder="Thème ou chapitre" aria-label="Thème ou chapitre">
+                </div>
+                <div class="simu-group" style="margin-top: 8px;">
+                    <input type="number" id="simu-note" min="0" max="20" placeholder="Note visée /20" aria-label="Note visée" step="0.5" oninput="calculerToutesProjections()">
+                    <input type="number" id="simu-coeff" min="0.5" max="10" placeholder="Coeff" aria-label="Coefficient simulé" value="1" step="0.5" oninput="calculerToutesProjections()">
+                </div>
+                <div class="info-box" id="projection-b-texte">Saisissez une note et un coeff pour simuler l'impact.</div>
+
+                <button class="btn btn-primary" style="margin-top: 12px;" id="btn-fiche-claude" onclick="genererFicheClaude()">Un coup de pouce ? Générer une fiche de révision</button>
+                <div class="info-box" id="fiche-result" style="display:none; white-space:pre-wrap;"></div>
+
+                <h2 class="section-title" style="margin-top: 16px;">Pour aller plus loin</h2>
+                <div class="link-row">
+                    <a href="#" id="link-lumni" target="_blank" class="btn-link">Lumni</a>
+                    <a href="#" id="link-kartable" target="_blank" class="btn-link">Kartable</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Modal ajout / édition de note -->
+<div class="modal-overlay" id="note-modal" onclick="fermerFormulaireNoteSiFond(event)">
+    <div class="modal-sheet">
+        <h3 class="modal-title" id="note-modal-title">Ajouter une note</h3>
+
+        <div style="margin-bottom: 10px;">
+            <label class="field-label" for="form-matiere">Matière</label>
+            <select id="form-matiere" aria-label="Matière" onchange="gestionMatiereForm(this.value)">
+            </select>
+            <input type="text" id="form-matiere-custom" placeholder="Nom de la matière" aria-label="Nom de la matière" style="display:none; margin-top: 8px;">
+        </div>
+
+        <div class="field-row">
+            <div>
+                <label class="field-label" for="form-note">Note /20</label>
+                <input type="number" id="form-note" min="0" max="20" step="0.5" aria-label="Note sur 20">
+            </div>
+            <div>
+                <label class="field-label" for="form-coeff">Coefficient</label>
+                <input type="number" id="form-coeff" min="0.5" max="10" step="0.5" aria-label="Coefficient">
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-primary" onclick="enregistrerFormulaireNote()">Enregistrer</button>
+            <button class="btn btn-secondary" onclick="fermerFormulaireNote()">Annuler</button>
+        </div>
+        <button class="btn btn-danger" style="margin-top: 8px; display:none;" id="form-delete-btn" onclick="supprimerDepuisFormulaire()">Supprimer cette note</button>
+    </div>
+</div>
+
+<div class="toast-msg" id="toast"></div>
+
+<script>
+    const MATIERES_PAR_DEFAULT = [
+        "Mathématiques", "Français", "Histoire-Géographie", "SVT",
+        "Physique-Chimie", "Anglais", "Espagnol", "Allemand",
+        "Philosophie", "Enseignement Scientifique", "SES", "EPS"
+    ];
+
+    // --- État local (par appareil, jamais synchronisé) ---
+    let local = {
+        activeChildId: null,
+        activeTab: "notes",
+        profilOuvert: false
+    };
+
+    // --- État partagé (miroir de la base db, mis à jour en direct) ---
+    let childrenMap = {};
+    let childOrder = [];
+    let db = null;
+    let sampleFn = null;
+    let profilWriteTimer = null;
+    let editingNoteIndex = null; // null = ajout, sinon édition
+
+    function loadLocal() {
+        const saved = localStorage.getItem("suiviScolaireLocalV3");
+        if (saved) { try { local = { ...local, ...JSON.parse(saved) }; } catch (e) {} }
+    }
+    function saveLocal() { localStorage.setItem("suiviScolaireLocalV3", JSON.stringify(local)); }
+
+    window.onload = async function () {
+        loadLocal();
+        mettreAJourMatieresDisponibles();
+        appliquerOnglet();
+        appliquerProfilVisuel();
+
+        db = await claude.use("db");
+        if (!db) { afficherToast("Synchro indisponible sur cette vue."); return; }
+
+        claude.use("sample").then(s => {
+            sampleFn = s;
+            if (!s) document.getElementById("btn-fiche-claude").style.display = "none";
+        });
+
+        db.collection("children").orderBy("prenom").onSnapshot(snap => {
+            childrenMap = {};
+            childOrder = [];
+            snap.docs.forEach(d => {
+                if (!d.exists) return;
+                childrenMap[d.id] = d.data();
+                childOrder.push(d.id);
+            });
+
+            if (!local.activeChildId || !childrenMap[local.activeChildId]) {
+                local.activeChildId = childOrder[0] || null;
+                saveLocal();
+            }
+
+            renderChildSwitcher();
+            renderActiveChild();
+        }, err => { console.error(err); afficherToast("Erreur de synchronisation."); });
+    };
+
+    // --- Sélecteur d'enfant ---
+    function renderChildSwitcher() {
+        const switcher = document.getElementById("child-switcher");
+        const empty = document.getElementById("empty-state");
+        const main = document.getElementById("main-content");
+
+        if (childOrder.length === 0) {
+            switcher.style.display = "none";
+            empty.style.display = "block";
+            main.style.display = "none";
+            return;
+        }
+
+        empty.style.display = "none";
+        main.style.display = "block";
+        switcher.style.display = "flex";
+
+        switcher.innerHTML = "";
+        childOrder.forEach(id => {
+            const c = childrenMap[id];
+            const pill = document.createElement("button");
+            pill.className = "child-pill" + (id === local.activeChildId ? " active" : "");
+            pill.innerText = c.prenom || "Sans nom";
+            pill.onclick = () => { local.activeChildId = id; saveLocal(); renderChildSwitcher(); renderActiveChild(); };
+            switcher.appendChild(pill);
+        });
+
+        const addPill = document.createElement("button");
+        addPill.className = "child-pill add-pill";
+        addPill.innerText = "+ Enfant";
+        addPill.onclick = () => {
+            const nom = prompt("Prénom du nouvel élève :");
+            if (nom && nom.trim()) ajouterEnfantNomme(nom.trim());
+        };
+        switcher.appendChild(addPill);
+    }
+
+    async function ajouterEnfant() {
+        const input = document.getElementById("new-child-name");
+        const nom = input.value.trim();
+        if (!nom) { afficherToast("Indiquez un prénom."); return; }
+        await ajouterEnfantNomme(nom);
+        input.value = "";
+    }
+
+    async function ajouterEnfantNomme(prenom) {
+        if (!db) return;
+        const ref = await db.collection("children").add({
+            prenom: prenom, nom: "", classe: "",
+            notes: [
+                { matiere: "Mathématiques", customMatiere: "", note: 13, coeff: 1 },
+                { matiere: "Français", customMatiere: "", note: 15, coeff: 1 }
+            ],
+            objectif: 14
+        });
+        local.activeChildId = ref.id;
+        saveLocal();
+    }
+
+    async function supprimerEnfant() {
+        if (!local.activeChildId) return;
+        const c = childrenMap[local.activeChildId];
+        if (!confirm(`Supprimer définitivement le profil de ${c.prenom} ? Cette action est irréversible.`)) return;
+        await db.doc("children/" + local.activeChildId).delete();
+        local.activeChildId = null;
+        saveLocal();
+    }
+
+    function getActiveChild() {
+        return local.activeChildId ? childrenMap[local.activeChildId] : null;
+    }
+
+    // --- Rendu du profil actif ---
+    function renderActiveChild() {
+        const c = getActiveChild();
+        if (!c) return;
+
+        if (document.activeElement?.id !== "prenom") document.getElementById("prenom").value = c.prenom || "";
+        if (document.activeElement?.id !== "nom") document.getElementById("nom").value = c.nom || "";
+        if (document.activeElement?.id !== "classe") document.getElementById("classe").value = c.classe || "";
+
+        document.getElementById("profile-toggle-text").innerText = c.prenom ? `Profil de ${c.prenom}` : "Profil";
+
+        const objVal = c.objectif ?? 14;
+        if (document.activeElement?.id !== "objectif-slider") {
+            document.getElementById("objectif-slider").value = objVal;
+            document.getElementById("target-display").innerText = parseFloat(objVal).toFixed(1) + " / 20";
+        }
+
+        genererLiensRevision();
+        afficherNotes();
+    }
+
+    // --- Profil repliable ---
+    function toggleProfil() {
+        local.profilOuvert = !local.profilOuvert;
+        saveLocal();
+        appliquerProfilVisuel();
+    }
+    function appliquerProfilVisuel() {
+        document.getElementById("profile-body").classList.toggle("open", local.profilOuvert);
+        document.getElementById("profile-chevron").classList.toggle("open", local.profilOuvert);
+    }
+
+    // --- Sauvegarde profil ---
+    function sauvegarderProfilDebounce() {
+        clearTimeout(profilWriteTimer);
+        profilWriteTimer = setTimeout(sauvegarderProfilImmediat, 600);
+    }
+    async function sauvegarderProfilImmediat() {
+        if (!local.activeChildId || !db) return;
+        await db.doc("children/" + local.activeChildId).update({
+            prenom: document.getElementById("prenom").value,
+            nom: document.getElementById("nom").value,
+            classe: document.getElementById("classe").value
+        });
+    }
+
+    // --- Onglets Notes / Objectifs ---
+    function changerOnglet(onglet) {
+        local.activeTab = onglet;
+        saveLocal();
+        appliquerOnglet();
+    }
+    function appliquerOnglet() {
+        const surNotes = local.activeTab === "notes";
+        document.getElementById("tab-btn-notes").classList.toggle("active", surNotes);
+        document.getElementById("tab-btn-objectifs").classList.toggle("active", !surNotes);
+        document.getElementById("panel-notes").style.display = surNotes ? "block" : "none";
+        document.getElementById("panel-objectifs").style.display = surNotes ? "none" : "block";
+    }
+
+    // --- Calculs ---
+    function getMoyenneGeneraleNumerique() {
+        const c = getActiveChild();
+        if (!c || !c.notes) return 0;
+        let pts = 0, coeffs = 0;
+        c.notes.forEach(i => { pts += i.note * i.coeff; coeffs += i.coeff; });
+        return coeffs > 0 ? (pts / coeffs) : 0;
+    }
+
+    function nomMatiereAffiche(item) {
+        return item.matiere === "AUTRE" ? (item.customMatiere || "Autre") : item.matiere;
+    }
+
+    function afficherNotes() {
+        const c = getActiveChild();
+        const container = document.getElementById("notes-list");
+        const emptyMsg = document.getElementById("notes-empty");
+        container.innerHTML = "";
+        if (!c) return;
+
+        const notes = c.notes || [];
+        emptyMsg.style.display = notes.length === 0 ? "block" : "none";
+
+        const moyenneActuelle = getMoyenneGeneraleNumerique();
+
+        notes.forEach((item, index) => {
+            let badgeClass = "mid";
+            if (item.note >= 14) badgeClass = "high";
+            else if (item.note < 10) badgeClass = "low";
+
+            let trendSymbol = "–", trendClass = "";
+            if (moyenneActuelle > 0) {
+                if (item.note > moyenneActuelle) { trendSymbol = "↑"; trendClass = "up"; }
+                else if (item.note < moyenneActuelle) { trendSymbol = "↓"; trendClass = "down"; }
+            }
+
+            const row = document.createElement("div");
+            row.className = "note-row";
+            row.onclick = () => ouvrirFormulaireNote(index);
+            row.innerHTML = `
+                <div class="note-main">
+                    <div class="note-matiere">${nomMatiereAffiche(item)}</div>
+                    <div class="note-meta">Coefficient ${item.coeff}</div>
+                </div>
+                <span class="trend ${trendClass}">${trendSymbol}</span>
+                <span class="note-badge ${badgeClass}">${item.note}/20</span>
+            `;
+            container.appendChild(row);
+        });
+
+        calculerMoyenne();
+    }
+
+    function calculerMoyenne() {
+        const c = getActiveChild();
+        let totalPoints = 0, totalCoeffs = 0;
+        (c?.notes || []).forEach(item => { totalPoints += item.note * item.coeff; totalCoeffs += item.coeff; });
+
+        const txtMoyenne = totalCoeffs === 0 ? "-- / 20" : (totalPoints / totalCoeffs).toFixed(2) + " / 20";
+        document.getElementById("moyenne-generale").innerText = txtMoyenne;
+        document.getElementById("dashboard-objectif-sub").innerText = "Objectif : " + (c?.objectif ?? 14).toFixed(1) + " / 20";
+
+        if (totalCoeffs > 0) calculerToutesProjections(totalPoints / totalCoeffs, totalCoeffs);
+        else calculerToutesProjections(0, 0);
+    }
+
+    function mettreAJourSliderLocal(valeur) {
+        document.getElementById("target-display").innerText = parseFloat(valeur).toFixed(1) + " / 20";
+        document.getElementById("dashboard-objectif-sub").innerText = "Objectif : " + parseFloat(valeur).toFixed(1) + " / 20";
+        calculerToutesProjections();
+    }
+    async function mettreAJourSliderCommit(valeur) {
+        if (!local.activeChildId || !db) return;
+        await db.doc("children/" + local.activeChildId).update({ objectif: parseFloat(valeur) });
+    }
+
+    function calculerToutesProjections(moyenneActuelle, totalCoeffsActuel) {
+        if (moyenneActuelle === undefined) {
+            const c = getActiveChild();
+            let pts = 0, coeffs = 0;
+            (c?.notes || []).forEach(i => { pts += i.note * i.coeff; coeffs += i.coeff; });
+            moyenneActuelle = coeffs > 0 ? pts / coeffs : 0;
+            totalCoeffsActuel = coeffs;
+        }
+
+        const pointsActuels = moyenneActuelle * totalCoeffsActuel;
+        const objectif = parseFloat(document.getElementById("objectif-slider").value) || 14;
+        const elemA = document.getElementById("projection-a-texte");
+
+        if (isNaN(objectif)) {
+            elemA.innerText = "Indiquez un objectif valide.";
+        } else if (totalCoeffsActuel === 0) {
+            elemA.innerText = "Ajoutez au moins une note pour calculer une projection.";
+        } else if (moyenneActuelle >= objectif) {
+            elemA.innerHTML = `Objectif atteint ! Gardez au moins <strong>${objectif}/20</strong> aux prochains devoirs.`;
+        } else {
+            const noteReq = (objectif * (totalCoeffsActuel + 1)) - pointsActuels;
+            if (noteReq > 20) {
+                const maxAtteignable = (pointsActuels + 20) / (totalCoeffsActuel + 1);
+                elemA.innerHTML = `Un seul 20/20 (coeff 1) monterait votre moyenne à <strong>${maxAtteignable.toFixed(2)}/20</strong>. Plusieurs bonnes notes nécessaires !`;
+            } else {
+                elemA.innerHTML = `Obtenez au moins <strong>${noteReq.toFixed(2)}/20</strong> au prochain devoir (coeff 1) pour atteindre l'objectif.`;
+            }
+        }
+
+        const simuNote = parseFloat(document.getElementById("simu-note").value);
+        const simuCoeff = parseFloat(document.getElementById("simu-coeff").value) || 1;
+        const elemB = document.getElementById("projection-b-texte");
+
+        if (!isNaN(simuNote) && totalCoeffsActuel !== undefined) {
+            const nouveauxPoints = pointsActuels + (simuNote * simuCoeff);
+            const nouveauxCoeffs = totalCoeffsActuel + simuCoeff;
+            const nouvelleMoyenne = nouveauxPoints / nouveauxCoeffs;
+            const diff = nouvelleMoyenne - moyenneActuelle;
+            const signe = diff >= 0 ? "+" : "";
+            const couleurDiff = diff >= 0 ? "var(--success)" : "var(--danger)";
+            elemB.innerHTML = `Avec un <strong>${simuNote}/20</strong> (coeff ${simuCoeff}), la moyenne passe à <strong>${nouvelleMoyenne.toFixed(2)}/20</strong> (<span style="color:${couleurDiff}">${signe}${diff.toFixed(2)} pt</span>).`;
+        } else {
+            elemB.innerText = "Saisissez une note et un coeff pour simuler l'impact.";
+        }
+    }
+
+    // --- Formulaire d'ajout / édition de note (modal) ---
+    function remplirOptionsMatiere(selectEl) {
+        selectEl.innerHTML = MATIERES_PAR_DEFAULT.map(m => `<option value="${m}">${m}</option>`).join("") + `<option value="AUTRE">Autre...</option>`;
+    }
+
+    function ouvrirFormulaireNote(index) {
+        editingNoteIndex = (typeof index === "number") ? index : null;
+        const c = getActiveChild();
+        const select = document.getElementById("form-matiere");
+        remplirOptionsMatiere(select);
+        const customInput = document.getElementById("form-matiere-custom");
+        const deleteBtn = document.getElementById("form-delete-btn");
+
+        if (editingNoteIndex !== null && c?.notes?.[editingNoteIndex]) {
+            const item = c.notes[editingNoteIndex];
+            document.getElementById("note-modal-title").innerText = "Modifier la note";
+            select.value = item.matiere;
+            customInput.style.display = item.matiere === "AUTRE" ? "block" : "none";
+            customInput.value = item.customMatiere || "";
+            document.getElementById("form-note").value = item.note;
+            document.getElementById("form-coeff").value = item.coeff;
+            deleteBtn.style.display = "block";
+        } else {
+            document.getElementById("note-modal-title").innerText = "Ajouter une note";
+            select.value = "Mathématiques";
+            customInput.style.display = "none";
+            customInput.value = "";
+            document.getElementById("form-note").value = 10;
+            document.getElementById("form-coeff").value = 1;
+            deleteBtn.style.display = "none";
+        }
+
+        document.getElementById("note-modal").classList.add("open");
+    }
+
+    function gestionMatiereForm(valeur) {
+        document.getElementById("form-matiere-custom").style.display = valeur === "AUTRE" ? "block" : "none";
+    }
+
+    function fermerFormulaireNote() {
+        document.getElementById("note-modal").classList.remove("open");
+        editingNoteIndex = null;
+    }
+    function fermerFormulaireNoteSiFond(event) {
+        if (event.target.id === "note-modal") fermerFormulaireNote();
+    }
+
+    async function enregistrerFormulaireNote() {
+        const c = getActiveChild();
+        if (!c || !local.activeChildId) return;
+
+        const matiere = document.getElementById("form-matiere").value;
+        const customMatiere = document.getElementById("form-matiere-custom").value.trim();
+        const note = parseFloat(document.getElementById("form-note").value);
+        const coeff = parseFloat(document.getElementById("form-coeff").value);
+
+        if (isNaN(note) || note < 0 || note > 20) { afficherToast("Indiquez une note valide entre 0 et 20."); return; }
+        if (isNaN(coeff) || coeff <= 0) { afficherToast("Indiquez un coefficient valide."); return; }
+        if (matiere === "AUTRE" && !customMatiere) { afficherToast("Indiquez le nom de la matière."); return; }
+
+        const nouvelleNote = { matiere, customMatiere, note, coeff };
+        const notes = [...(c.notes || [])];
+        if (editingNoteIndex !== null) notes[editingNoteIndex] = nouvelleNote;
+        else notes.push(nouvelleNote);
+
+        await db.doc("children/" + local.activeChildId).update({ notes });
+        fermerFormulaireNote();
+    }
+
+    async function supprimerDepuisFormulaire() {
+        const c = getActiveChild();
+        if (!c || !local.activeChildId || editingNoteIndex === null) return;
+        const notes = [...(c.notes || [])];
+        notes.splice(editingNoteIndex, 1);
+        await db.doc("children/" + local.activeChildId).update({ notes });
+        fermerFormulaireNote();
+    }
+
+    // --- Divers ---
+    function afficherToast(message) {
+        const toast = document.getElementById("toast");
+        toast.innerText = message;
+        toast.style.display = "block";
+        setTimeout(() => { toast.style.display = "none"; }, 3000);
+    }
+
+    function mettreAJourMatieresDisponibles() {
+        const selectSimu = document.getElementById("simu-matiere-select");
+        selectSimu.innerHTML = `<option value="">Matière...</option>`;
+        MATIERES_PAR_DEFAULT.forEach(m => { selectSimu.innerHTML += `<option value="${m}">${m}</option>`; });
+        selectSimu.innerHTML += `<option value="AUTRE">Autre...</option>`;
+    }
+
+    function gestionMatiereSimu(valeur) {
+        document.getElementById("simu-matiere-custom").style.display = valeur === "AUTRE" ? "block" : "none";
+        genererLiensRevision();
+    }
+
+    function getMatiereSimuSelectionnee() {
+        const selectVal = document.getElementById("simu-matiere-select").value;
+        if (selectVal === "AUTRE") return document.getElementById("simu-matiere-custom").value.trim();
+        return selectVal;
+    }
+
+    function genererLiensRevision() {
+        const classe = document.getElementById("classe").value;
+        const matiere = getMatiereSimuSelectionnee();
+        const theme = document.getElementById("simu-theme").value.trim();
+        const q = encodeURIComponent(`${classe} ${matiere} ${theme}`);
+        document.getElementById("link-lumni").href = `https://www.lumni.fr/recherche?q=${q}`;
+        document.getElementById("link-kartable").href = `https://www.kartable.fr/recherche?q=${q}`;
+    }
+
+    function copyForErrorCode(code) {
+        switch (code) {
+            case "not_granted":
+            case "sampling_disabled":
+            case "not_declared":
+            case "capability_disabled":
+            case "capability_removed":
+                return "Claude n'est pas disponible sur cette vue.";
+            case "rate_limited":
+                return "Trop de demandes pour l'instant — réessayez dans un instant.";
+            case "session_expired":
+                return "Votre session a expiré — reconnectez-vous puis réessayez.";
+            case "refused":
+                return "Claude n'a pas pu répondre à cette demande.";
+            case "prompt_too_large":
+                return "La demande est trop longue — raccourcissez le thème.";
+            default:
+                return "Une erreur est survenue — réessayez.";
+        }
+    }
+
+    async function genererFicheClaude() {
+        if (!sampleFn) { afficherToast("Claude n'est pas disponible sur cette vue."); return; }
+
+        const classe = document.getElementById("classe").value || "Collège/Lycée";
+        const matiere = getMatiereSimuSelectionnee() || "Matière générale";
+        const theme = document.getElementById("simu-theme").value.trim() || "Révision générale";
+
+        const promptText = `Génère une fiche de révision express pour un élève de ${classe}.
+Matière : ${matiere}
+Chapitre : ${theme}
+
+Contenu attendu :
+1. Les 3 notions clés indispensables.
+2. Un exemple concret ou une formule essentielle.
+3. L'erreur classique à éviter en évaluation.
+
+Rédige le tout de façon concise, claire et directe, en texte brut sans mise en forme Markdown.`;
+
+        const btn = document.getElementById("btn-fiche-claude");
+        const resultBox = document.getElementById("fiche-result");
+        btn.disabled = true;
+        resultBox.style.display = "block";
+        resultBox.innerText = "Réflexion en cours...";
+
+        try {
+            const { text } = await sampleFn(promptText, {
+                modelTier: "quick",
+                onText: ({ text }) => { resultBox.innerText = text; }
+            });
+            resultBox.innerText = text;
+        } catch (e) {
+            if (e.text) resultBox.innerText = e.text;
+            else resultBox.style.display = "none";
+            afficherToast(copyForErrorCode(e.code));
+        } finally {
+            btn.disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>
