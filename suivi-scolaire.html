@@ -166,12 +166,25 @@
             display: none; z-index: 999; max-width: 90vw; text-align: center;
         }
     </style>
+
+    <!-- Firebase (Firestore) : nécessaire pour sauvegarder et synchroniser les données -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
 <div class="container">
 
     <h1 class="app-title">Suivi Scolaire</h1>
+
+    <!-- Affiché uniquement si firebaseConfig n'a pas été renseigné -->
+    <div class="card" id="setup-warning" style="display:none;">
+        <p class="muted-note" style="margin:0;">
+            Configuration Firebase manquante. Renseignez <code>firebaseConfig</code> en bas du fichier
+            <code>suivi-scolaire.html</code> avec les identifiants de votre projet Firebase pour activer
+            la sauvegarde des données. Voir le README pour la procédure.
+        </p>
+    </div>
 
     <div class="child-switcher" id="child-switcher" style="display:none;"></div>
 
@@ -291,9 +304,6 @@
                 </div>
                 <div class="info-box" id="projection-b-texte">Saisissez une note et un coeff pour simuler l'impact.</div>
 
-                <button class="btn btn-primary" style="margin-top: 12px;" id="btn-fiche-claude" onclick="genererFicheClaude()">Un coup de pouce ? Générer une fiche de révision</button>
-                <div class="info-box" id="fiche-result" style="display:none; white-space:pre-wrap;"></div>
-
                 <h2 class="section-title" style="margin-top: 16px;">Pour aller plus loin</h2>
                 <div class="link-row">
                     <a href="#" id="link-lumni" target="_blank" class="btn-link">Lumni</a>
@@ -356,9 +366,21 @@
     let childrenMap = {};
     let childOrder = [];
     let db = null;
-    let sampleFn = null;
     let profilWriteTimer = null;
     let editingNoteIndex = null; // null = ajout, sinon édition
+
+    // --- Configuration Firebase ---
+    // Remplacez les valeurs ci-dessous par celles de votre projet Firebase
+    // (Console Firebase > Paramètres du projet > Vos applications > Config SDK).
+    // Voir le README.md pour la procédure complète de création du projet.
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT_ID.appspot.com",
+        messagingSenderId: "YOUR_SENDER_ID",
+        appId: "YOUR_APP_ID"
+    };
 
     function loadLocal() {
         const saved = localStorage.getItem("suiviScolaireLocalV3");
@@ -366,19 +388,20 @@
     }
     function saveLocal() { localStorage.setItem("suiviScolaireLocalV3", JSON.stringify(local)); }
 
-    window.onload = async function () {
+    window.onload = function () {
         loadLocal();
         mettreAJourMatieresDisponibles();
         appliquerOnglet();
         appliquerProfilVisuel();
 
-        db = await claude.use("db");
-        if (!db) { afficherToast("Synchro indisponible sur cette vue."); return; }
+        if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
+            document.getElementById("setup-warning").style.display = "block";
+            afficherToast("Configuration Firebase manquante — voir le README.");
+            return;
+        }
 
-        claude.use("sample").then(s => {
-            sampleFn = s;
-            if (!s) document.getElementById("btn-fiche-claude").style.display = "none";
-        });
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
 
         db.collection("children").orderBy("prenom").onSnapshot(snap => {
             childrenMap = {};
@@ -766,65 +789,6 @@
         document.getElementById("link-kartable").href = `https://www.kartable.fr/recherche?q=${q}`;
     }
 
-    function copyForErrorCode(code) {
-        switch (code) {
-            case "not_granted":
-            case "sampling_disabled":
-            case "not_declared":
-            case "capability_disabled":
-            case "capability_removed":
-                return "Claude n'est pas disponible sur cette vue.";
-            case "rate_limited":
-                return "Trop de demandes pour l'instant — réessayez dans un instant.";
-            case "session_expired":
-                return "Votre session a expiré — reconnectez-vous puis réessayez.";
-            case "refused":
-                return "Claude n'a pas pu répondre à cette demande.";
-            case "prompt_too_large":
-                return "La demande est trop longue — raccourcissez le thème.";
-            default:
-                return "Une erreur est survenue — réessayez.";
-        }
-    }
-
-    async function genererFicheClaude() {
-        if (!sampleFn) { afficherToast("Claude n'est pas disponible sur cette vue."); return; }
-
-        const classe = document.getElementById("classe").value || "Collège/Lycée";
-        const matiere = getMatiereSimuSelectionnee() || "Matière générale";
-        const theme = document.getElementById("simu-theme").value.trim() || "Révision générale";
-
-        const promptText = `Génère une fiche de révision express pour un élève de ${classe}.
-Matière : ${matiere}
-Chapitre : ${theme}
-
-Contenu attendu :
-1. Les 3 notions clés indispensables.
-2. Un exemple concret ou une formule essentielle.
-3. L'erreur classique à éviter en évaluation.
-
-Rédige le tout de façon concise, claire et directe, en texte brut sans mise en forme Markdown.`;
-
-        const btn = document.getElementById("btn-fiche-claude");
-        const resultBox = document.getElementById("fiche-result");
-        btn.disabled = true;
-        resultBox.style.display = "block";
-        resultBox.innerText = "Réflexion en cours...";
-
-        try {
-            const { text } = await sampleFn(promptText, {
-                modelTier: "quick",
-                onText: ({ text }) => { resultBox.innerText = text; }
-            });
-            resultBox.innerText = text;
-        } catch (e) {
-            if (e.text) resultBox.innerText = e.text;
-            else resultBox.style.display = "none";
-            afficherToast(copyForErrorCode(e.code));
-        } finally {
-            btn.disabled = false;
-        }
-    }
 </script>
 
 </body>
