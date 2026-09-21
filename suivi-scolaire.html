@@ -176,6 +176,8 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <!-- EmailJS : optionnel, envoie un email de notification quand une note est ajoutée/modifiée -->
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
 
@@ -274,6 +276,11 @@
                             <option value="Terminale Bac Pro">Terminale Bac Pro</option>
                         </optgroup>
                     </select>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <label class="field-label" for="notif-email">Email de notification (optionnel)</label>
+                    <input type="email" id="notif-email" placeholder="parent@exemple.fr" aria-label="Email de notification" oninput="sauvegarderProfilDebounce()">
+                    <p class="muted-note" style="margin-top: 4px;">Reçoit un email à chaque note ajoutée ou modifiée pour cet enfant.</p>
                 </div>
                 <button class="btn btn-danger" id="btn-supprimer-enfant" onclick="supprimerEnfant()">Supprimer ce profil élève</button>
             </div>
@@ -468,6 +475,16 @@
         appId: "1:159513065085:web:376911f10b79d4ac08a314"
     };
 
+    // --- Configuration EmailJS (optionnelle) ---
+    // Créez un compte gratuit sur emailjs.com, connectez une adresse email et un
+    // modèle, puis remplacez les valeurs ci-dessous. Voir le README pour le détail.
+    // Tant que EMAILJS_PUBLIC_KEY vaut "YOUR_EMAILJS_PUBLIC_KEY", aucun email n'est envoyé.
+    const emailjsConfig = {
+        publicKey: "YOUR_EMAILJS_PUBLIC_KEY",
+        serviceId: "YOUR_EMAILJS_SERVICE_ID",
+        templateId: "YOUR_EMAILJS_TEMPLATE_ID"
+    };
+
     function loadLocal() {
         const saved = localStorage.getItem("suiviScolaireLocalV3");
         if (saved) { try { local = { ...local, ...JSON.parse(saved) }; } catch (e) {} }
@@ -490,8 +507,27 @@
         db = firebase.firestore();
         auth = firebase.auth();
 
+        if (emailjsConfig.publicKey && emailjsConfig.publicKey !== "YOUR_EMAILJS_PUBLIC_KEY" && window.emailjs) {
+            emailjs.init({ publicKey: emailjsConfig.publicKey });
+        }
+
         auth.onAuthStateChanged(gererChangementAuth);
     };
+
+    function notificationEmailActive() {
+        return !!(window.emailjs && emailjsConfig.publicKey && emailjsConfig.publicKey !== "YOUR_EMAILJS_PUBLIC_KEY");
+    }
+
+    function envoyerNotificationNote(enfant, note) {
+        if (!notificationEmailActive() || !enfant.notifEmail) return;
+        emailjs.send(emailjsConfig.serviceId, emailjsConfig.templateId, {
+            to_email: enfant.notifEmail,
+            prenom: enfant.prenom || "Votre enfant",
+            matiere: nomMatiereAffiche(note),
+            note: note.note,
+            coeff: note.coeff
+        }).catch(e => console.error("Envoi email notification échoué :", e));
+    }
 
     async function gererChangementAuth(user) {
         if (unsubscribeChildren) { unsubscribeChildren(); unsubscribeChildren = null; }
@@ -523,6 +559,12 @@
         const roleData = roleDoc.data();
         currentRole = roleData.role;
         currentChildId = roleData.childId || null;
+
+        // Complète l'email manquant (cas d'un compte créé à la main dans la console
+        // Firebase, sans passer par l'onglet Comptes) pour un affichage correct.
+        if (!roleData.email && currentRole === "parent") {
+            db.doc("users/" + user.uid).update({ email: user.email }).catch(() => {});
+        }
 
         afficherApp();
         appliquerRestrictionsRole();
@@ -585,7 +627,7 @@
     // --- Restrictions selon le rôle : un compte "child" est en lecture seule ---
     function appliquerRestrictionsRole() {
         const lectureSeule = currentRole !== "parent";
-        ["prenom", "nom", "classe", "objectif-slider"].forEach(id => {
+        ["prenom", "nom", "classe", "notif-email", "objectif-slider"].forEach(id => {
             document.getElementById(id).disabled = lectureSeule;
         });
         document.getElementById("btn-supprimer-enfant").style.display = lectureSeule ? "none" : "block";
@@ -856,6 +898,7 @@
         if (document.activeElement?.id !== "prenom") document.getElementById("prenom").value = c.prenom || "";
         if (document.activeElement?.id !== "nom") document.getElementById("nom").value = c.nom || "";
         if (document.activeElement?.id !== "classe") document.getElementById("classe").value = c.classe || "";
+        if (document.activeElement?.id !== "notif-email") document.getElementById("notif-email").value = c.notifEmail || "";
 
         document.getElementById("profile-toggle-text").innerText = c.prenom ? `Profil de ${c.prenom}` : "Profil";
 
@@ -890,7 +933,8 @@
         await db.doc("children/" + local.activeChildId).update({
             prenom: document.getElementById("prenom").value,
             nom: document.getElementById("nom").value,
-            classe: document.getElementById("classe").value
+            classe: document.getElementById("classe").value,
+            notifEmail: document.getElementById("notif-email").value.trim()
         });
     }
 
@@ -1102,6 +1146,7 @@
         else notes.push(nouvelleNote);
 
         await db.doc("children/" + local.activeChildId).update({ notes });
+        envoyerNotificationNote(c, nouvelleNote);
         fermerFormulaireNote();
     }
 
