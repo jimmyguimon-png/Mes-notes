@@ -290,6 +290,7 @@
         <div class="tab-bar">
             <button class="tab-btn active" id="tab-btn-notes" onclick="changerOnglet('notes')">Notes</button>
             <button class="tab-btn" id="tab-btn-objectifs" onclick="changerOnglet('objectifs')">Objectifs &amp; Simulation</button>
+            <button class="tab-btn" id="tab-btn-comptes" onclick="changerOnglet('comptes')">Comptes</button>
         </div>
 
         <!-- Onglet Notes -->
@@ -341,6 +342,17 @@
                 </div>
             </div>
         </div>
+
+        <!-- Onglet Comptes (parents uniquement) -->
+        <div id="panel-comptes" style="display:none;">
+            <div class="card">
+                <h2 class="section-title">Comptes existants</h2>
+                <div id="comptes-list"></div>
+                <div class="empty-notes" id="comptes-empty" style="display:none;">Aucun compte pour l'instant.</div>
+                <button class="btn btn-secondary" style="margin-top: 10px;" onclick="ouvrirFormulaireCompte()">+ Ajouter un compte</button>
+                <div class="muted-note">Un compte enfant est en lecture seule sur son propre profil. La suppression d'un compte se fait depuis la console Firebase (Authentication).</div>
+            </div>
+        </div>
         </div>
 
     </div>
@@ -378,6 +390,40 @@
     </div>
 </div>
 
+<!-- Modal création de compte -->
+<div class="modal-overlay" id="compte-modal" onclick="fermerFormulaireCompteSiFond(event)">
+    <div class="modal-sheet">
+        <h3 class="modal-title">Ajouter un compte</h3>
+
+        <div style="margin-bottom: 10px;">
+            <label class="field-label" for="compte-email">Email</label>
+            <input type="email" id="compte-email" placeholder="email@exemple.fr" aria-label="Email du nouveau compte">
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label class="field-label" for="compte-password">Mot de passe</label>
+            <input type="text" id="compte-password" placeholder="Au moins 6 caractères" aria-label="Mot de passe du nouveau compte">
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label class="field-label" for="compte-role">Rôle</label>
+            <select id="compte-role" aria-label="Rôle du compte" onchange="gestionRoleCompte(this.value)">
+                <option value="parent">Parent (accès complet)</option>
+                <option value="child">Enfant (lecture seule sur son profil)</option>
+            </select>
+        </div>
+        <div style="margin-bottom: 10px;" id="compte-enfant-bloc">
+            <label class="field-label" for="compte-enfant">Profil élève lié</label>
+            <select id="compte-enfant" aria-label="Profil élève lié à ce compte"></select>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-primary" id="btn-creer-compte" onclick="creerCompte()">Créer le compte</button>
+            <button class="btn btn-secondary" onclick="fermerFormulaireCompte()">Annuler</button>
+        </div>
+        <p class="muted-note" id="compte-erreur" style="display:none; color: var(--danger);"></p>
+        <p class="muted-note">Communiquez cet email et ce mot de passe à la personne concernée pour qu'elle se connecte.</p>
+    </div>
+</div>
+
 <div class="toast-msg" id="toast"></div>
 
 <script>
@@ -407,6 +453,7 @@
     let currentRole = null;      // "parent" ou "child"
     let currentChildId = null;   // renseigné uniquement pour un compte "child"
     let unsubscribeChildren = null;
+    let unsubscribeComptes = null;
 
     // --- Configuration Firebase ---
     // Remplacez les valeurs ci-dessous par celles de votre projet Firebase
@@ -448,6 +495,7 @@
 
     async function gererChangementAuth(user) {
         if (unsubscribeChildren) { unsubscribeChildren(); unsubscribeChildren = null; }
+        if (unsubscribeComptes) { unsubscribeComptes(); unsubscribeComptes = null; }
 
         if (!user) {
             currentUser = null; currentRole = null; currentChildId = null;
@@ -479,6 +527,7 @@
         afficherApp();
         appliquerRestrictionsRole();
         demarrerEcouteEnfants();
+        if (currentRole === "parent") demarrerEcouteComptes();
     }
 
     function afficherEcranConnexion() {
@@ -541,6 +590,12 @@
         });
         document.getElementById("btn-supprimer-enfant").style.display = lectureSeule ? "none" : "block";
         document.getElementById("btn-ajouter-note").style.display = lectureSeule ? "none" : "block";
+        document.getElementById("tab-btn-comptes").style.display = lectureSeule ? "none" : "block";
+        if (lectureSeule && local.activeTab === "comptes") {
+            local.activeTab = "notes";
+            saveLocal();
+        }
+        appliquerOnglet();
     }
 
     function demarrerEcouteEnfants() {
@@ -577,6 +632,141 @@
             }, err => { console.error(err); afficherToast("Erreur de synchronisation."); });
         } else {
             afficherToast("Compte élève mal configuré (aucun profil lié). Contactez l'administrateur.");
+        }
+    }
+
+    // --- Gestion des comptes (réservé aux parents) ---
+    let comptesMap = {}; // uid -> { role, childId, email }
+
+    function demarrerEcouteComptes() {
+        unsubscribeComptes = db.collection("users").onSnapshot(snap => {
+            comptesMap = {};
+            snap.docs.forEach(d => { if (d.exists) comptesMap[d.id] = d.data(); });
+            renderComptesList();
+        }, err => { console.error(err); });
+    }
+
+    function renderComptesList() {
+        const container = document.getElementById("comptes-list");
+        const emptyMsg = document.getElementById("comptes-empty");
+        const uids = Object.keys(comptesMap);
+        container.innerHTML = "";
+        emptyMsg.style.display = uids.length === 0 ? "block" : "none";
+
+        uids.forEach(uid => {
+            const c = comptesMap[uid];
+            const estEnfant = c.role === "child";
+            const enfantNom = estEnfant && childrenMap[c.childId] ? childrenMap[c.childId].prenom : null;
+            const sousTitre = estEnfant
+                ? "Enfant" + (enfantNom ? " · " + enfantNom : " · profil introuvable")
+                : "Parent";
+
+            const row = document.createElement("div");
+            row.className = "note-row";
+            row.style.cursor = "default";
+            row.innerHTML = `
+                <div class="note-main">
+                    <div class="note-matiere">${escapeHtmlCompte(c.email || uid)}</div>
+                    <div class="note-meta">${escapeHtmlCompte(sousTitre)}</div>
+                </div>
+            `;
+            container.appendChild(row);
+        });
+    }
+
+    function escapeHtmlCompte(str) {
+        return String(str == null ? "" : str).replace(/[&<>"']/g, c => ({
+            "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+        })[c]);
+    }
+
+    function ouvrirFormulaireCompte() {
+        if (currentRole !== "parent") return;
+        document.getElementById("compte-email").value = "";
+        document.getElementById("compte-password").value = "";
+        document.getElementById("compte-role").value = "parent";
+
+        const selectEnfant = document.getElementById("compte-enfant");
+        selectEnfant.innerHTML = childOrder.map(id =>
+            `<option value="${id}">${escapeHtmlCompte(childrenMap[id].prenom || "Sans nom")}</option>`
+        ).join("");
+
+        gestionRoleCompte("parent");
+        document.getElementById("compte-erreur").style.display = "none";
+        document.getElementById("compte-modal").classList.add("open");
+    }
+
+    function gestionRoleCompte(role) {
+        document.getElementById("compte-enfant-bloc").style.display = role === "child" ? "block" : "none";
+    }
+
+    function fermerFormulaireCompte() {
+        document.getElementById("compte-modal").classList.remove("open");
+    }
+    function fermerFormulaireCompteSiFond(event) {
+        if (event.target.id === "compte-modal") fermerFormulaireCompte();
+    }
+
+    async function creerCompte() {
+        if (currentRole !== "parent") return;
+
+        const email = document.getElementById("compte-email").value.trim();
+        const password = document.getElementById("compte-password").value;
+        const role = document.getElementById("compte-role").value;
+        const childId = document.getElementById("compte-enfant").value;
+        const errBox = document.getElementById("compte-erreur");
+        errBox.style.display = "none";
+
+        if (!email || !password) {
+            errBox.innerText = "Indiquez un email et un mot de passe.";
+            errBox.style.display = "block";
+            return;
+        }
+        if (password.length < 6) {
+            errBox.innerText = "Le mot de passe doit faire au moins 6 caractères.";
+            errBox.style.display = "block";
+            return;
+        }
+        if (role === "child" && !childId) {
+            errBox.innerText = "Aucun profil élève à lier. Créez d'abord un profil dans l'onglet Notes.";
+            errBox.style.display = "block";
+            return;
+        }
+
+        const btn = document.getElementById("btn-creer-compte");
+        btn.disabled = true;
+
+        // Un compte Firebase Auth secondaire évite de déconnecter le parent
+        // en cours de session lors de la création du nouveau compte.
+        const secondaryApp = firebase.initializeApp(firebaseConfig, "creation-compte-" + Date.now());
+        try {
+            const secondaryAuth = secondaryApp.auth();
+            const credential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
+            const newUid = credential.user.uid;
+            await secondaryAuth.signOut();
+
+            const userDoc = { role, email };
+            if (role === "child") userDoc.childId = childId;
+            await db.doc("users/" + newUid).set(userDoc);
+
+            afficherToast("Compte créé : " + email);
+            fermerFormulaireCompte();
+        } catch (e) {
+            console.error(e);
+            errBox.innerText = messageErreurCreationCompte(e.code);
+            errBox.style.display = "block";
+        } finally {
+            btn.disabled = false;
+            await secondaryApp.delete();
+        }
+    }
+
+    function messageErreurCreationCompte(code) {
+        switch (code) {
+            case "auth/email-already-in-use": return "Un compte existe déjà avec cet email.";
+            case "auth/invalid-email": return "Adresse email invalide.";
+            case "auth/weak-password": return "Mot de passe trop faible (6 caractères minimum).";
+            default: return "Impossible de créer le compte.";
         }
     }
 
@@ -712,10 +902,14 @@
     }
     function appliquerOnglet() {
         const surNotes = local.activeTab === "notes";
+        const surObjectifs = local.activeTab === "objectifs";
+        const surComptes = local.activeTab === "comptes";
         document.getElementById("tab-btn-notes").classList.toggle("active", surNotes);
-        document.getElementById("tab-btn-objectifs").classList.toggle("active", !surNotes);
+        document.getElementById("tab-btn-objectifs").classList.toggle("active", surObjectifs);
+        document.getElementById("tab-btn-comptes").classList.toggle("active", surComptes);
         document.getElementById("panel-notes").style.display = surNotes ? "block" : "none";
-        document.getElementById("panel-objectifs").style.display = surNotes ? "none" : "block";
+        document.getElementById("panel-objectifs").style.display = surObjectifs ? "block" : "none";
+        document.getElementById("panel-comptes").style.display = surComptes ? "block" : "none";
     }
 
     // --- Calculs ---
