@@ -101,7 +101,34 @@ compte de supprimer un autre compte sans configuration serveur supplémentaire) 
 révoquer un accès, désactivez ou supprimez l'utilisateur correspondant dans Console
 Firebase > **Authentication** > **Users**.
 
-## 4. Déployer (GitHub Pages)
+## 4. Notification par email à chaque note (optionnel)
+
+L'app peut envoyer un email automatiquement à chaque fois qu'une note est ajoutée ou
+modifiée pour un enfant, via [EmailJS](https://www.emailjs.com) (gratuit jusqu'à 200
+emails/mois, aucun serveur à héberger).
+
+1. Créer un compte gratuit sur [emailjs.com](https://www.emailjs.com).
+2. **Email Services** > **Add New Service** > connecter une adresse email (Gmail,
+   Outlook...). Noter le **Service ID** généré.
+3. **Email Templates** > **Create New Template**. Utiliser ces variables dans le
+   contenu du modèle : `{{to_email}}`, `{{prenom}}`, `{{matiere}}`, `{{note}}`,
+   `{{coeff}}`. Exemple de corps de message :
+   ```
+   Nouvelle note pour {{prenom}} : {{matiere}} — {{note}}/20 (coefficient {{coeff}})
+   ```
+   Dans les paramètres du template, définir le champ **To Email** sur `{{to_email}}`.
+   Noter le **Template ID**.
+4. **Account** > **General** : noter la **Public Key**.
+5. Ouvrir `suivi-scolaire.html`, repérer la constante `emailjsConfig` (juste après
+   `firebaseConfig`) et remplacer les valeurs `YOUR_EMAILJS_...` par celles notées
+   ci-dessus.
+
+Tant que `emailjsConfig.publicKey` vaut `YOUR_EMAILJS_PUBLIC_KEY`, aucun email n'est
+envoyé (fonctionnement normal du reste de l'app inchangé). Une fois configuré, chaque
+profil élève peut renseigner un "Email de notification" dans son Profil (repliable) —
+laissez ce champ vide pour ne recevoir aucun email pour cet enfant.
+
+## 5. Déployer (GitHub Pages)
 
 1. Pousser les fichiers (`index.html`, `suivi-scolaire.html`) sur la branche par défaut du dépôt.
 2. Dans les paramètres du dépôt GitHub : **Settings > Pages**.
@@ -121,3 +148,4 @@ Firebase > **Authentication** > **Users**.
 - Simulateur d'impact d'un futur devoir sur la moyenne.
 - Liens de révision (Lumni, Kartable) préremplis selon le niveau et la matière.
 - Données synchronisées en direct entre tous les appareils via Firestore.
+- Notification par email (optionnelle, via EmailJS) à chaque note ajoutée ou modifiée.
