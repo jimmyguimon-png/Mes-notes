@@ -32,8 +32,8 @@ et les synchroniser en direct entre les appareils (téléphone du parent, tablet
        }
 
        match /users/{uid} {
-         allow read: if request.auth != null && request.auth.uid == uid;
-         allow write: if false; // géré uniquement depuis la console Firebase, jamais depuis l'app
+         allow read: if request.auth != null && (request.auth.uid == uid || estParent());
+         allow write: if estParent(); // seul un parent déjà existant peut créer/gérer des comptes
        }
 
        match /children/{childId} {
@@ -45,10 +45,10 @@ et les synchroniser en direct entre les appareils (téléphone du parent, tablet
    ```
 
    Ces règles imposent d'être connecté (voir étape 4). Un compte "parent" a un accès
-   complet à tous les enfants ; un compte "child" ne peut que lire le profil qui lui
-   est lié (aucune écriture possible). Les documents de la collection `users` ne sont
-   jamais modifiables depuis l'app, uniquement depuis la console Firebase — cela évite
-   qu'un compte puisse s'auto-attribuer le rôle "parent".
+   complet à tous les enfants ainsi qu'à la gestion des comptes ; un compte "child" ne
+   peut que lire le profil qui lui est lié (aucune écriture possible). Un compte ne peut
+   jamais s'auto-attribuer le rôle "parent" : il faut déjà être parent pour écrire dans
+   la collection `users`, y compris pour créer son propre compte.
 
 4. Activer l'authentification : menu **Authentication** > **Get started** > onglet
    **Sign-in method** > activer le fournisseur **Email/Password**.
@@ -70,32 +70,36 @@ d'avertissement au lieu de charger les données.
 
 Chaque personne (parent ou enfant) doit avoir son propre compte, avec des droits
 différents : un **parent** peut tout gérer (ajouter/modifier/supprimer des profils et
-des notes) ; un **enfant** ne peut que consulter son propre profil, en lecture seule.
+des notes, et créer d'autres comptes) ; un **enfant** ne peut que consulter son propre
+profil, en lecture seule.
 
-Il n'y a pas d'auto-inscription dans l'app : chaque compte est créé manuellement par
-vous, l'administrateur de l'app, directement dans la console Firebase.
+**Une seule étape manuelle est nécessaire : le tout premier compte parent.** Tous les
+comptes suivants (autres parents, enfants) se créent ensuite directement depuis l'app,
+dans l'onglet **Comptes** (visible uniquement une fois connecté avec un compte parent).
 
-**A. Créer le compte de connexion (Authentication)**
+**A. Créer le tout premier compte parent (une seule fois, dans la console Firebase)**
 
 1. Console Firebase > **Authentication** > onglet **Users** > **Add user**.
-2. Renseigner un email et un mot de passe pour la personne (parent ou enfant),
-   puis valider.
-3. Noter l'**UID** généré pour cet utilisateur (colonne "User UID") — il sera
-   nécessaire à l'étape suivante.
+2. Renseigner votre email et un mot de passe, puis valider.
+3. Noter l'**UID** généré (colonne "User UID").
+4. Console Firebase > **Firestore Database** > onglet **Données** > créer la collection
+   `users` > ajouter un document dont l'**ID est exactement cet UID**, avec un seul
+   champ `role` (string) = `parent`.
+5. Se connecter sur l'app avec cet email et ce mot de passe.
 
-**B. Déclarer son rôle (Firestore)**
+**B. Créer les autres comptes (depuis l'app, une fois connecté en tant que parent)**
 
-1. Console Firebase > **Firestore Database** > onglet **Données**.
-2. Créer (ou ouvrir) la collection `users`.
-3. Ajouter un document dont l'**ID du document est exactement l'UID** noté à l'étape A :
-   - Pour un **parent** : un seul champ `role` (string) = `parent`.
-   - Pour un **enfant** : un champ `role` (string) = `child`, et un champ `childId`
-     (string) = l'ID du document de cet enfant dans la collection `children`
-     (visible dans l'onglet Données > `children` > cliquer sur le profil concerné,
-     l'ID est affiché en haut de la fiche du document).
+1. Ouvrir l'onglet **Comptes**.
+2. Cliquer sur **+ Ajouter un compte**.
+3. Renseigner un email et un mot de passe pour la personne, choisir son rôle
+   (**Parent** ou **Enfant**), et pour un enfant, sélectionner le profil élève à lier.
+4. Cliquer sur **Créer le compte**, puis communiquer l'email et le mot de passe à la
+   personne concernée pour qu'elle se connecte.
 
-Répéter A et B pour chaque parent et chaque enfant devant se connecter. La personne
-se connecte ensuite sur l'app avec l'email et le mot de passe créés à l'étape A.
+Il n'y a pas de bouton de suppression de compte dans l'app (Firebase ne permet pas à un
+compte de supprimer un autre compte sans configuration serveur supplémentaire) : pour
+révoquer un accès, désactivez ou supprimez l'utilisateur correspondant dans Console
+Firebase > **Authentication** > **Users**.
 
 ## 4. Déployer (GitHub Pages)
 
@@ -109,7 +113,7 @@ se connecte ensuite sur l'app avec l'email et le mot de passe créés à l'étap
 ## Fonctionnalités
 
 - Connexion par compte (email + mot de passe), avec deux rôles :
-  - **Parent** : accès complet à tous les enfants (ajout, édition, suppression de profils et de notes).
+  - **Parent** : accès complet à tous les enfants (ajout, édition, suppression de profils et de notes), et peut créer d'autres comptes directement depuis l'onglet Comptes.
   - **Enfant** : accès en lecture seule à son propre profil uniquement (pas de suppression, pas de modification, pas de visibilité sur les autres enfants).
 - Gestion de plusieurs profils d'enfants (ajout, édition, suppression) — réservé au rôle parent.
 - Saisie des notes avec matière, coefficient, et calcul automatique de la moyenne générale.
